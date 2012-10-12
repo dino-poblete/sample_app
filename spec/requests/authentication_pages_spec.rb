@@ -22,6 +22,10 @@ describe "Authentication" do
 
       it { should have_title('Sign in') }
       it { should have_error_message('Invalid') }
+
+      it { should_not have_link('Profile') }
+      it { should_not have_link('Settings') }
+
 #       it { should have_selector('div.alert.alert-error', text: 'Invalid') }
       
     describe "after visiting another page" do
@@ -58,6 +62,11 @@ describe "Authentication" do
         it { should have_signin_link }
 #        it { should have_link('Sign in') }
       end
+      
+      describe "to not allow visit to new or create pages" do
+        before { visit signup_path }
+        it { should have_content('already logged in') }
+      end
     end
   end
 
@@ -65,13 +74,14 @@ describe "Authentication" do
   
     describe "for non-signed-in users" do
       let(:user) { FactoryGirl.create(:user) }
+      it { should_not have_link('Profile') }
+      it { should_not have_link('Settings') }
+
 
       describe "when attempting to visit a protected page" do
         before do
           visit edit_user_path(user)
-          fill_in "Email",    with: user.email
-          fill_in "Password", with: user.password
-          click_button "Sign in"
+          sign_in user
         end
 
         describe "after signing in" do
@@ -79,6 +89,17 @@ describe "Authentication" do
           it "should render the desired protected page" do
             page.should have_title('Edit user')
           end
+        
+          describe "when signing in again" do
+            before do
+              delete signout_path
+              sign_in user
+            end
+
+            it "should render the default (profile) page" do
+              page.should have_title(user.name) 
+            end
+          end       
         end
       end
       
@@ -117,7 +138,7 @@ describe "Authentication" do
       end
     end
 
-   describe "as non-admin user" do
+    describe "as non-admin user" do
       let(:user) { FactoryGirl.create(:user) }
       let(:non_admin) { FactoryGirl.create(:user) }
 
@@ -126,6 +147,18 @@ describe "Authentication" do
       describe "submitting a DELETE request to the Users#destroy action" do
         before { delete user_path(user) }
         specify { response.should redirect_to(root_path) }        
+      end
+    end
+    
+    describe "as admin user" do
+    let(:admin) { FactoryGirl.create(:admin) }
+    before { sign_in admin }
+    
+      describe "deleting self" do
+        it "should not be possible" do
+          expect { delete user_path(admin) }.to_not change(User, :count).by(-1)
+          response.should redirect_to(users_path), flash[:error].should =~ /Can not delete own admin account!/i 
+        end
       end
     end
   end
